@@ -38,6 +38,7 @@ enum PostType {
 enum MediaType {
   IMAGE
   VIDEO
+  TEXT
 }
 
 enum FollowRequestStatus {
@@ -226,7 +227,19 @@ model Story {
   expiresAt   DateTime
   createdAt   DateTime  @default(now())
 
+  views StoryView[]
+
   @@index([authorId, expiresAt])
+}
+
+model StoryView {
+  id        String   @id @default(uuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id])
+  viewerId  String
+  createdAt DateTime @default(now())
+
+  @@unique([storyId, viewerId])
 }
 
 model Reel {

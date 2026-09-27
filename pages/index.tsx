@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../utils/apiClient';
 import { PostCard } from '../components/PostCard';
+import { StoriesBar } from '../components/StoriesBar';
 import type { Post, PaginatedResult } from '../types';
 
 export default function HomePage() {
@@ -41,6 +42,7 @@ export default function HomePage() {
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 24 }}>
       <h1>Nikayia</h1>
+      <StoriesBar />
       {loadingFeed && <p>A carregar publicações...</p>}
       {posts.map((post) => (
         <PostCard key={post.id} post={post} />
