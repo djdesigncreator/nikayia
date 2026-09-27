@@ -35,14 +35,15 @@ que não lhe pertencem.
 
 ## 2. Responsabilidades por Camada
 
-### 2.1 Bubble.io — apenas Identidade
-- Criar conta, login, logout, recuperação/alteração de password.
-- Gestão básica de dados de utilizador (username, email, estado da conta).
-- Após autenticar, gera um **token de sessão assinado** (JWT) que o frontend
-  passa a usar em todos os pedidos ao backend.
+### 2.1 Bubble.io — apenas Identidade (sem páginas visuais)
+- Não tem nenhuma página visual — só **Backend Workflows** (API Workflows),
+  que funcionam como uma API: `signup`, `login`, e outros CRUDs que vierem
+  a ser precisos.
+- O nosso próprio backend chama esses workflows por trás (servidor-a-servidor),
+  nunca o frontend diretamente — ver `BUBBLE_SETUP.md`.
+- Cada workflow relevante (signup, login) devolve um **JWT assinado** que o
+  nosso backend repassa ao frontend.
 - Bubble **nunca** processa feed, stories, reels, lives ou qualquer lógica pesada.
-- Bubble pode ser usado como orquestrador de integrações externas administrativas
-  (ex.: disparar um plugin), mas nunca como motor da experiência social.
 
 ### 2.2 Backend / GitHub — o cérebro da aplicação
 Estrutura de pastas (conforme definido):
@@ -88,11 +89,14 @@ Estrutura de pastas (conforme definido):
 
 ## 3. Fluxo de Autenticação
 
-1. Utilizador faz login/registo no Bubble.
-2. Bubble valida credenciais e emite um JWT assinado (contendo `user_id`, `role`, `exp`).
-3. Frontend guarda o token (memória / secure storage) e anexa-o em `Authorization: Bearer <token>` em todos os pedidos ao backend.
-4. Backend valida o JWT (mesma chave secreta partilhada com o Bubble, ou JWKS se o Bubble expuser um endpoint de verificação) antes de processar qualquer pedido.
-5. Nenhuma credencial (secrets do Bubble, do Bunny ou do Agora) é exposta ao frontend — tudo fica em variáveis de ambiente do backend (`.env`, nunca commitado).
+1. Utilizador preenche email/password no formulário do Next.js (`pages/login.tsx`).
+2. Frontend chama `POST /api/auth/login` (ou `/signup`) no **nosso backend**.
+3. O backend chama o Backend Workflow correspondente no Bubble
+   (`POST {BUBBLE_API_BASE_URL}/login`), servidor-a-servidor.
+4. O Bubble valida as credenciais, assina um JWT (contendo `user_id`, `role`, `exp`) e devolve-o.
+5. O backend repassa `{ token }` ao frontend, que o guarda e passa a anexá-lo
+   em `Authorization: Bearer <token>` em todos os pedidos seguintes ao backend.
+6. Nenhuma credencial (secrets do Bubble, do Bunny ou do Agora) é exposta ao frontend — tudo fica em variáveis de ambiente do backend (`.env`, nunca commitado).
 
 ## 4. Roles e Permissões
 
