@@ -102,5 +102,36 @@ postsRouter.get('/', requireAuth, async (req, res) => {
   return paginated(res, items, nextCursor);
 });
 
-// TODO: /posts/:id/save, /posts/:id/share, /posts/:id/report — mesmo padrão,
-// usando os modelos SavedPost, Share, Report.
+postsRouter.post('/:id/save', requireAuth, async (req, res) => {
+  await prisma.savedPost.upsert({
+    where: { userId_postId: { userId: req.user!.id, postId: req.params.id } },
+    update: {},
+    create: { userId: req.user!.id, postId: req.params.id },
+  });
+  return ok(res, { saved: true });
+});
+
+postsRouter.delete('/:id/save', requireAuth, async (req, res) => {
+  await prisma.savedPost.deleteMany({ where: { userId: req.user!.id, postId: req.params.id } });
+  return ok(res, { saved: false });
+});
+
+postsRouter.post('/:id/share', requireAuth, async (req, res) => {
+  await prisma.$transaction([
+    prisma.share.create({ data: { userId: req.user!.id, postId: req.params.id } }),
+    prisma.post.update({ where: { id: req.params.id }, data: { sharesCount: { increment: 1 } } }),
+  ]);
+  return ok(res, { shared: true });
+});
+
+postsRouter.post('/:id/report', requireAuth, async (req, res) => {
+  const { category, description } = req.body as { category?: string; description?: string };
+  if (!category) return fail(res, 'VALIDATION_ERROR', 'category é obrigatório.');
+
+  const report = await prisma.report.create({
+    data: { reporterId: req.user!.id, targetType: 'POST', targetId: req.params.id, category: category as never, description },
+  });
+  return ok(res, report, 201);
+});
+
+// TODO: extrair hashtags/menções de `caption` e criar Notification/PostHashtag correspondentes.

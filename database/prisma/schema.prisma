@@ -203,6 +203,22 @@ model Like {
   @@unique([userId, reelId])
 }
 
+model Share {
+  id      String @id @default(uuid())
+  userId  String
+  postId  String
+
+  @@index([postId])
+}
+
+model SavedPost {
+  id      String @id @default(uuid())
+  userId  String
+  postId  String
+
+  @@unique([userId, postId])
+}
+
 model Comment {
   id               String    @id @default(uuid())
   postId           String
@@ -214,8 +230,19 @@ model Comment {
   likesCount       Int       @default(0)
   createdAt        DateTime  @default(now())
 
+  commentLikes CommentLike[]
+
   @@index([postId, createdAt])
   @@index([parentCommentId])
+}
+
+model CommentLike {
+  id        String  @id @default(uuid())
+  userId    String
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id])
+
+  @@unique([userId, commentId])
 }
 
 model Story {

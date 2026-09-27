@@ -1,15 +1,37 @@
 import { Router } from 'express';
-import { requireAuth } from '../../utils/auth.middleware';
-import { fail } from '../../utils/response';
+import { PrismaClient } from '@prisma/client';
+import { requireAuth, requireRole } from '../../utils/auth.middleware';
+import { ok, fail } from '../../utils/response';
 
 export const reportsRouter = Router();
+const prisma = new PrismaClient();
 
-/**
- * Rotas de 'reports' - ver API_SPEC.md para a lista completa de endpoints
- * deste dominio e os respetivos contratos de request/response.
- * Seguir o padrao ja implementado em api/posts/posts.routes.ts e
- * api/users/users.routes.ts (Prisma + requireAuth + ok/fail/paginated).
- */
-reportsRouter.get('/', requireAuth, (_req, res) => {
-  return fail(res, 'NOT_IMPLEMENTED', 'Endpoint de reports por implementar.', 501);
+/** GET /api/reports?status= — listar denúncias. Só moderação/admin. */
+reportsRouter.get('/', requireAuth, requireRole('MODERATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  const status = req.query.status as string | undefined;
+  const reports = await prisma.report.findMany({
+    where: status ? { status: status as never } : undefined,
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+  return ok(res, reports);
+});
+
+/** PATCH /api/reports/:id — atualizar estado / registar ação tomada. Só moderação/admin. */
+reportsRouter.patch('/:id', requireAuth, requireRole('MODERATOR', 'ADMIN', 'SUPER_ADMIN'), async (req, res) => {
+  const { status } = req.body as { status?: 'PENDING' | 'REVIEWED' | 'ACTIONED' | 'DISMISSED' };
+  if (!status) return fail(res, 'VALIDATION_ERROR', 'status é obrigatório.');
+
+  const report = await prisma.report.update({ where: { id: req.params.id }, data: { status } });
+
+  await prisma.adminAction.create({
+    data: {
+      adminId: req.user!.id,
+      actionType: 'REVIEW_REPORT',
+      targetId: report.id,
+      notes: `Denúncia marcada como ${status}`,
+    },
+  });
+
+  return ok(res, report);
 });
