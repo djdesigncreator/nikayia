@@ -38,6 +38,7 @@ export interface Reel {
   caption?: string;
   viewsCount: number;
   likesCount: number;
+  commentsCount: number;
   createdAt: string;
 }
 
@@ -48,6 +49,46 @@ export interface Live {
   status: 'SCHEDULED' | 'LIVE' | 'ENDED';
   agoraChannelName: string;
   viewersCount: number;
+}
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content?: string;
+  mediaUrl?: string;
+  status: 'SENT' | 'DELIVERED' | 'SEEN';
+  createdAt: string;
+}
+
+export interface ConversationParticipant {
+  userId: string;
+}
+
+export interface Conversation {
+  id: string;
+  participants: ConversationParticipant[];
+  messages?: Message[];
+}
+
+export interface Notification {
+  id: string;
+  recipientId: string;
+  actorId: string;
+  type:
+    | 'FOLLOW'
+    | 'FOLLOW_REQUEST'
+    | 'LIKE'
+    | 'COMMENT'
+    | 'REPLY'
+    | 'MENTION'
+    | 'SHARE'
+    | 'MESSAGE'
+    | 'LIVE_STARTED'
+    | 'LIVE_INVITE';
+  entityId?: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export interface ApiSuccess<T> {

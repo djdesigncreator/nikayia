@@ -255,9 +255,21 @@ model Reel {
   createdAt      DateTime @default(now())
 
   likes Like[]
+  views ReelView[]
 
   @@index([authorId])
   @@index([createdAt])
+}
+
+model ReelView {
+  id           String   @id @default(uuid())
+  reelId       String
+  reel         Reel     @relation(fields: [reelId], references: [id])
+  viewerId     String
+  watchTimeMs  Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([reelId])
 }
 
 model Live {
@@ -273,8 +285,33 @@ model Live {
   recordingUrl       String?
   createdAt          DateTime   @default(now())
 
+  participants LiveParticipant[]
+  comments     LiveComment[]
+
   @@index([status])
   @@index([hostId])
+}
+
+model LiveParticipant {
+  id        String   @id @default(uuid())
+  liveId    String
+  live      Live     @relation(fields: [liveId], references: [id])
+  userId    String
+  role      LiveRole @default(VIEWER)
+  joinedAt  DateTime @default(now())
+
+  @@unique([liveId, userId])
+}
+
+model LiveComment {
+  id        String   @id @default(uuid())
+  liveId    String
+  live      Live     @relation(fields: [liveId], references: [id])
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([liveId, createdAt])
 }
 
 model Conversation {
@@ -282,6 +319,17 @@ model Conversation {
   createdAt DateTime @default(now())
 
   messages     Message[]
+  participants ConversationParticipant[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  userId         String
+
+  @@unique([conversationId, userId])
+  @@index([userId])
 }
 
 model Message {

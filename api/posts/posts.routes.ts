@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../../utils/auth.middleware';
+import { createNotification } from '../notifications/notifications.routes';
 import { decodeCursor, encodeCursor } from '../../utils/pagination';
 import { ok, fail, paginated } from '../../utils/response';
 
@@ -53,6 +54,9 @@ postsRouter.delete('/:id', requireAuth, async (req, res) => {
 });
 
 postsRouter.post('/:id/like', requireAuth, async (req, res) => {
+  const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+  if (!post) return fail(res, 'NOT_FOUND', 'Publicação não encontrada.', 404);
+
   await prisma.$transaction([
     prisma.like.upsert({
       where: { userId_postId: { userId: req.user!.id, postId: req.params.id } },
@@ -61,6 +65,7 @@ postsRouter.post('/:id/like', requireAuth, async (req, res) => {
     }),
     prisma.post.update({ where: { id: req.params.id }, data: { likesCount: { increment: 1 } } }),
   ]);
+  await createNotification({ recipientId: post.authorId, actorId: req.user!.id, type: 'LIKE', entityId: post.id });
   return ok(res, { liked: true });
 });
 

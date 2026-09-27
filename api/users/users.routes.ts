@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../../utils/auth.middleware';
+import { createNotification } from '../notifications/notifications.routes';
 import { ok, fail } from '../../utils/response';
 
 export const usersRouter = Router();
@@ -53,6 +54,7 @@ usersRouter.post('/:id/follow', requireAuth, async (req, res) => {
       update: {},
       create: { requesterId: req.user!.id, targetId },
     });
+    await createNotification({ recipientId: targetId, actorId: req.user!.id, type: 'FOLLOW_REQUEST' });
     return ok(res, { status: 'PENDING', request });
   }
 
@@ -61,6 +63,7 @@ usersRouter.post('/:id/follow', requireAuth, async (req, res) => {
     update: {},
     create: { followerId: req.user!.id, followingId: targetId },
   });
+  await createNotification({ recipientId: targetId, actorId: req.user!.id, type: 'FOLLOW' });
   return ok(res, { status: 'FOLLOWING', follow });
 });
 

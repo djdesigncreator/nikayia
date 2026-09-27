@@ -42,7 +42,7 @@ app.use('/api/posts', postsRouter);
 app.use('/api/reels', reelsRouter);
 app.use('/api/stories', storiesRouter);
 app.use('/api/lives', livesRouter);
-app.use('/api/messages', messagesRouter);
+app.use('/api', messagesRouter); // expõe /api/conversations e /api/messages/:id/seen, conforme API_SPEC.md
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/hashtags', hashtagsRouter);
