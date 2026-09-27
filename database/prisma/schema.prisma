@@ -1,0 +1,357 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  CREATOR
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum Visibility {
+  PUBLIC
+  FOLLOWERS
+  PRIVATE
+}
+
+enum PostType {
+  TEXT
+  IMAGE
+  VIDEO
+  CAROUSEL
+  LINK
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum FollowRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum LiveStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
+enum LiveRole {
+  HOST
+  CO_HOST
+  VIEWER
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  SEEN
+}
+
+enum NotificationType {
+  FOLLOW
+  FOLLOW_REQUEST
+  LIKE
+  COMMENT
+  REPLY
+  MENTION
+  SHARE
+  MESSAGE
+  LIVE_STARTED
+  LIVE_INVITE
+}
+
+enum ReportTargetType {
+  POST
+  COMMENT
+  USER
+  LIVE
+}
+
+enum ReportCategory {
+  SPAM
+  ABUSE
+  ILLEGAL
+  HARASSMENT
+  FRAUD
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  ACTIONED
+  DISMISSED
+}
+
+model User {
+  id            String     @id @default(uuid())
+  bubbleUserId  String     @unique
+  email         String     @unique
+  username      String     @unique
+  role          Role       @default(USER)
+  isPrivate     Boolean    @default(false)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  profile         Profile?
+  posts           Post[]
+  reels           Reel[]
+  stories         Story[]
+  comments        Comment[]
+  likes           Like[]
+  followers       Follow[]  @relation("following")
+  following       Follow[]  @relation("follower")
+  hostedLives     Live[]
+  notifications   Notification[] @relation("recipient")
+}
+
+model Profile {
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  user         User    @relation(fields: [userId], references: [id])
+  displayName  String
+  bio          String?
+  avatarUrl    String?
+  location     String?
+  isVerified   Boolean @default(false)
+}
+
+model Follow {
+  id           String   @id @default(uuid())
+  followerId   String
+  followingId  String
+  follower     User     @relation("follower", fields: [followerId], references: [id])
+  following    User     @relation("following", fields: [followingId], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model FollowRequest {
+  id           String               @id @default(uuid())
+  requesterId  String
+  targetId     String
+  status       FollowRequestStatus  @default(PENDING)
+  createdAt    DateTime             @default(now())
+
+  @@unique([requesterId, targetId])
+}
+
+model Post {
+  id             String     @id @default(uuid())
+  authorId       String
+  author         User       @relation(fields: [authorId], references: [id])
+  type           PostType
+  caption        String?
+  location       String?
+  visibility     Visibility @default(PUBLIC)
+  likesCount     Int        @default(0)
+  commentsCount  Int        @default(0)
+  sharesCount    Int        @default(0)
+  createdAt      DateTime   @default(now())
+
+  media     PostMedia[]
+  comments  Comment[]
+  likes     Like[]
+  hashtags  PostHashtag[]
+
+  @@index([authorId, createdAt])
+  @@index([createdAt])
+}
+
+model PostMedia {
+  id         String    @id @default(uuid())
+  postId     String
+  post       Post      @relation(fields: [postId], references: [id])
+  mediaUrl   String
+  mediaType  MediaType
+  orderIndex Int       @default(0)
+
+  @@index([postId])
+}
+
+model Like {
+  id        String  @id @default(uuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  postId    String?
+  post      Post?   @relation(fields: [postId], references: [id])
+  reelId    String?
+  reel      Reel?   @relation(fields: [reelId], references: [id])
+
+  @@unique([userId, postId])
+  @@unique([userId, reelId])
+}
+
+model Comment {
+  id               String    @id @default(uuid())
+  postId           String
+  post             Post      @relation(fields: [postId], references: [id])
+  authorId         String
+  author           User      @relation(fields: [authorId], references: [id])
+  parentCommentId  String?
+  content          String
+  likesCount       Int       @default(0)
+  createdAt        DateTime  @default(now())
+
+  @@index([postId, createdAt])
+  @@index([parentCommentId])
+}
+
+model Story {
+  id          String    @id @default(uuid())
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  mediaUrl    String
+  mediaType   MediaType
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([authorId, expiresAt])
+}
+
+model Reel {
+  id             String   @id @default(uuid())
+  authorId       String
+  author         User     @relation(fields: [authorId], references: [id])
+  videoUrl       String
+  thumbnailUrl   String
+  caption        String?
+  viewsCount     Int      @default(0)
+  likesCount     Int      @default(0)
+  commentsCount  Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  likes Like[]
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Live {
+  id                 String     @id @default(uuid())
+  hostId             String
+  host               User       @relation(fields: [hostId], references: [id])
+  title              String
+  description        String?
+  category           String?
+  agoraChannelName   String     @unique
+  status             LiveStatus @default(SCHEDULED)
+  viewersCount       Int        @default(0)
+  recordingUrl       String?
+  createdAt          DateTime   @default(now())
+
+  @@index([status])
+  @@index([hostId])
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  messages     Message[]
+}
+
+model Message {
+  id              String        @id @default(uuid())
+  conversationId  String
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+  senderId        String
+  content         String?
+  mediaUrl        String?
+  status          MessageStatus @default(SENT)
+  createdAt       DateTime      @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Notification {
+  id           String            @id @default(uuid())
+  recipientId  String
+  recipient    User              @relation("recipient", fields: [recipientId], references: [id])
+  actorId      String
+  type         NotificationType
+  entityId     String?
+  isRead       Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+
+  @@index([recipientId, isRead, createdAt])
+}
+
+model Hashtag {
+  id          String   @id @default(uuid())
+  tag         String   @unique
+  usageCount  Int      @default(0)
+
+  posts PostHashtag[]
+
+  @@index([usageCount])
+}
+
+model PostHashtag {
+  postId     String
+  post       Post     @relation(fields: [postId], references: [id])
+  hashtagId  String
+  hashtag    Hashtag  @relation(fields: [hashtagId], references: [id])
+
+  @@id([postId, hashtagId])
+}
+
+model Report {
+  id            String            @id @default(uuid())
+  reporterId    String
+  targetType    ReportTargetType
+  targetId      String
+  category      ReportCategory
+  description   String?
+  status        ReportStatus      @default(PENDING)
+  createdAt     DateTime          @default(now())
+
+  @@index([status, createdAt])
+}
+
+model Block {
+  id         String @id @default(uuid())
+  userId     String
+  blockedId  String
+
+  @@unique([userId, blockedId])
+}
+
+model Mute {
+  id        String @id @default(uuid())
+  userId    String
+  mutedId   String
+
+  @@unique([userId, mutedId])
+}
+
+model AdminAction {
+  id          String   @id @default(uuid())
+  adminId     String
+  actionType  String
+  targetId    String
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([adminId, createdAt])
+}
