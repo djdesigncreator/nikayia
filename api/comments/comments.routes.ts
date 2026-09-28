@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { createNotification } from '../notifications/notifications.routes';
 import { decodeCursor, encodeCursor } from '../../utils/pagination';
 import { ok, fail, paginated } from '../../utils/response';
 
 export const commentsRouter = Router();
-const prisma = new PrismaClient();
 
 /** GET /api/posts/:postId/comments?cursor= — listar comentários de um post. */
 commentsRouter.get('/posts/:postId/comments', requireAuth, async (req, res) => {

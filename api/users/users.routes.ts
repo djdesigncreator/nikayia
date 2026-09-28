@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { createNotification } from '../notifications/notifications.routes';
 import { ok, fail } from '../../utils/response';
 
 export const usersRouter = Router();
-const prisma = new PrismaClient();
 
 usersRouter.get('/me', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({

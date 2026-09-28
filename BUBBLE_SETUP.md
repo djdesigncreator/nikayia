@@ -24,8 +24,8 @@ por trás, servidor-a-servidor.
 4. Adicione a ação **"Sign the user up"**: Email = `email` (parâmetro), Password = `password` (parâmetro).
 5. Adicione a ação **JWT Sign**:
    - **Secret**: uma senha longa e aleatória (guarde-a — vai para `BUBBLE_JWT_SECRET` no `.env` do backend).
-   - **Payload**: `{"user_id": "Current User's unique id", "role": "USER"}`
-   - **Algorithm**: HS256
+   - **json data**: só o id do utilizador (`Result of step 1's unique id` no signup; `Current User's unique id` no login). O plugin Encode JWT guarda este valor no campo `data` do token, e é isso que o backend lê. O role NÃO vai no token: vem sempre da nossa base de dados.
+   - **Expiration**: opcional; se pedir formato de data, use uma data futura (ex.: daqui a 30 dias).
 6. Adicione a ação **"Return data from API"**:
    - `jwt` = resultado do passo Encode JWT (NÃO use o nome `token`: o Bubble já devolve um `token` próprio e há conflito)
    - `user_id` = Current User's unique id

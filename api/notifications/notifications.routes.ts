@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { decodeCursor, encodeCursor } from '../../utils/pagination';
 import { ok, paginated } from '../../utils/response';
 
 export const notificationsRouter = Router();
-const prisma = new PrismaClient();
 
 /** GET /api/notifications?cursor=&unread= — lista de notificações do utilizador. */
 notificationsRouter.get('/', requireAuth, async (req, res) => {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
+import { prisma } from '../../config/prisma';
 import { ok, fail } from '../../utils/response';
 
 export const authRouter = Router();
@@ -11,6 +12,21 @@ export const authRouter = Router();
  * (server-to-server, sem problemas de CORS e sem expor a URL do Bubble
  * ao browser). O Bubble já devolve o JWT assinado (ver BUBBLE_SETUP.md).
  */
+
+
+/**
+ * Garante que existe um utilizador na NOSSA base de dados para esta conta do
+ * Bubble. O Bubble guarda a identidade (email/password); nós guardamos tudo o
+ * resto (perfil, posts, seguidores...), ligado pelo id do Bubble.
+ */
+async function syncUser(bubbleUserId: string, email: string) {
+  const base = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'user';
+  return prisma.user.upsert({
+    where: { bubbleUserId },
+    update: {},
+    create: { bubbleUserId, email: email.toLowerCase(), username: `${base}_${bubbleUserId.slice(-5)}` },
+  });
+}
 
 interface BubbleAuthResponse {
   response: { jwt: string; user_id: string };
@@ -26,6 +42,7 @@ authRouter.post('/signup', async (req, res) => {
       email,
       password,
     });
+    await syncUser(data.response.user_id, email);
     return ok(res, { token: data.response.jwt }, 201);
   } catch (err) {
     return fail(res, 'BUBBLE_ERROR', 'Não foi possível criar a conta. Verifique os dados e tente novamente.', 400);
@@ -42,6 +59,7 @@ authRouter.post('/login', async (req, res) => {
       email,
       password,
     });
+    await syncUser(data.response.user_id, email);
     return ok(res, { token: data.response.jwt });
   } catch (err) {
     return fail(res, 'UNAUTHORIZED', 'Email ou password incorretos.', 401);

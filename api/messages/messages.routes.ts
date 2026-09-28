@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { createNotification } from '../notifications/notifications.routes';
 import { decodeCursor, encodeCursor } from '../../utils/pagination';
 import { ok, fail, paginated } from '../../utils/response';
 
 export const messagesRouter = Router();
-const prisma = new PrismaClient();
 
 /** GET /api/conversations — lista de conversas do utilizador, com a última mensagem. */
 messagesRouter.get('/conversations', requireAuth, async (req, res) => {

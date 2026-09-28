@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { ok, fail } from '../../utils/response';
 
 export const hashtagsRouter = Router();
-const prisma = new PrismaClient();
 
 /** GET /api/hashtags/trending — hashtags mais usadas. Tem de vir antes de /:tag. */
 hashtagsRouter.get('/trending', requireAuth, async (_req, res) => {

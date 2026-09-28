@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth, requireRole } from '../../utils/auth.middleware';
 import { ok } from '../../utils/response';
 
 export const adminRouter = Router();
-const prisma = new PrismaClient();
 
 async function logAction(adminId: string, actionType: string, targetId: string, notes?: string) {
   await prisma.adminAction.create({ data: { adminId, actionType, targetId, notes } });

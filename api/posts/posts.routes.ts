@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { createNotification } from '../notifications/notifications.routes';
 import { decodeCursor, encodeCursor } from '../../utils/pagination';
 import { ok, fail, paginated } from '../../utils/response';
 
 export const postsRouter = Router();
-const prisma = new PrismaClient();
 
 postsRouter.post('/', requireAuth, async (req, res) => {
   const { type, caption, location, visibility, media } = req.body as {

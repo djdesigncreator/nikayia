@@ -1,12 +1,11 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth, requireRole } from '../../utils/auth.middleware';
 import { AgoraService } from '../../services/AgoraService';
 import { ok, fail } from '../../utils/response';
 
 export const livesRouter = Router();
-const prisma = new PrismaClient();
 
 function agoraUidFor(userId: string): number {
   return parseInt(crypto.createHash('md5').update(userId).digest('hex').slice(0, 8), 16);

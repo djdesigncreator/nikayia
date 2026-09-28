@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { ok, fail } from '../../utils/response';
 
 export const storiesRouter = Router();
-const prisma = new PrismaClient();
 
 const DEFAULT_DURATION_HOURS = 24;
 

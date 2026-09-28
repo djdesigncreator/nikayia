@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
 import { decodeCursor, encodeCursor } from '../../utils/pagination';
 import { ok, fail, paginated } from '../../utils/response';
 
 export const reelsRouter = Router();
-const prisma = new PrismaClient();
 
 /**
  * POST /api/reels — criar um reel.
