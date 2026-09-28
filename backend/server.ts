@@ -1,8 +1,8 @@
+import 'dotenv/config'; // tem de ser o primeiro import: carrega o .env antes de qualquer módulo ler process.env
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 
 import { authRouter } from '../api/auth/auth.routes';
 import { usersRouter } from '../api/users/users.routes';
@@ -21,9 +21,8 @@ import { adminRouter } from '../api/admin/admin.routes';
 import { mediaRouter } from '../api/media/media.routes';
 import { errorHandler } from '../utils/errorHandler';
 
-dotenv.config();
-
 const app = express();
+app.set('trust proxy', 1); // atrás de um proxy (Render, etc.) o IP real vem no cabeçalho X-Forwarded-For
 
 app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN?.split(',') ?? '*' }));

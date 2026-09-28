@@ -30,14 +30,20 @@ Monorepo do projeto Nikayia. Ver `ARCHITECTURE.md`, `DATABASE_SCHEMA.md` e `API_
   /tests         → testes automatizados
 ```
 
-## Como começar
+## Como começar (local)
 
-1. Copiar `.env.example` para `.env` e preencher com as credenciais reais
-   (já criadas no Bubble.io, Bunny.net e Agora.io).
-2. `cd backend && npm install`
-3. `npx prisma migrate dev` (cria as tabelas na base de dados a partir de `database/prisma/schema.prisma`)
-4. `npm run dev` (arranca o servidor Express em modo desenvolvimento)
-5. Em paralelo, `cd frontend && npm install && npm run dev` para o Next.js.
+1. Copiar `.env.example` para `.env` e preencher (Bubble, Bunny.net, Agora.io, base de dados).
+2. `npm install` (na raiz — um só `package.json` serve o frontend e o backend).
+3. `npm run db:push` (cria as tabelas na base de dados PostgreSQL a partir de `database/prisma/schema.prisma`).
+4. `npm run dev:backend` → API em http://localhost:4000 (teste: /health).
+5. Noutro terminal, `npm run dev` → site em http://localhost:3000.
+
+## Online (sem computador próprio)
+
+- **Base de dados:** PostgreSQL gerido (ex.: Neon, Supabase ou Render Postgres).
+- **Backend:** serviço Node (ex.: Render). Build: `npm install && npm run build:backend`. Start: `npm run db:push && npm run start:backend`.
+- **Frontend:** Next.js (ex.: Vercel), com `NEXT_PUBLIC_API_BASE_URL` a apontar para o backend.
+- O GitHub Pages **não** serve: só hospeda ficheiros estáticos, e aqui há um servidor Node e páginas dinâmicas.
 
 ## Segurança
 
