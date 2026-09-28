@@ -1,12 +1,12 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../config/prisma';
+import { BubbleService } from '../services/BubbleService';
 import { ApiError } from './errorHandler';
 
 export type Role = 'USER' | 'CREATOR' | 'MODERATOR' | 'ADMIN' | 'SUPER_ADMIN';
 
 export interface AuthenticatedUser {
-  id: string; // id do utilizador na NOSSA base de dados (não o do Bubble)
+  id: string; // unique id do registo User no Bubble
   role: Role;
 }
 
@@ -19,7 +19,6 @@ declare global {
   }
 }
 
-/** Extrai o id do utilizador no Bubble do payload do JWT (plugin Encode JWT guarda-o em `data`). */
 function bubbleIdFromPayload(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object') return null;
   const p = payload as { data?: unknown; user_id?: unknown };
@@ -29,9 +28,10 @@ function bubbleIdFromPayload(payload: unknown): string | null {
 }
 
 /**
- * Valida o JWT emitido pelo Bubble e carrega o utilizador da nossa BD.
- * O token só prova QUEM é o utilizador; o role vem sempre da nossa base de
- * dados, por isso mudar alguém para MODERATOR/ADMIN tem efeito imediato.
+ * Valida o JWT emitido pelo Bubble e busca o utilizador diretamente na
+ * Data API do Bubble (que é agora a base de dados principal). O role e o
+ * status vêm sempre desta consulta, nunca do token — assim, suspender ou
+ * promover alguém no Bubble tem efeito imediato.
  */
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   (async () => {
@@ -48,19 +48,18 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
       throw new ApiError(401, 'UNAUTHORIZED', 'Token inválido ou expirado.');
     }
 
-    const bubbleUserId = bubbleIdFromPayload(payload);
-    if (!bubbleUserId) throw new ApiError(401, 'UNAUTHORIZED', 'Token inválido.');
+    const userId = bubbleIdFromPayload(payload);
+    if (!userId) throw new ApiError(401, 'UNAUTHORIZED', 'Token inválido.');
 
-    const user = await prisma.user.findUnique({ where: { bubbleUserId } });
+    const user = await BubbleService.get<{ role?: Role; status?: string }>('User', userId);
     if (!user) throw new ApiError(401, 'UNAUTHORIZED', 'Conta não encontrada. Volte a iniciar sessão.');
-    if (user.status !== 'ACTIVE') throw new ApiError(403, 'FORBIDDEN', 'Conta suspensa ou banida.');
+    if (user.status && user.status !== 'ACTIVE') throw new ApiError(403, 'FORBIDDEN', 'Conta suspensa ou banida.');
 
-    req.user = { id: user.id, role: user.role as Role };
+    req.user = { id: userId, role: (user.role as Role) ?? 'USER' };
     next();
   })().catch(next);
 }
 
-/** Restringe uma rota a um conjunto de roles. Usar depois de requireAuth. */
 export function requireRole(...roles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {
