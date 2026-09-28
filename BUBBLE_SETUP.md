@@ -27,7 +27,7 @@ por trás, servidor-a-servidor.
    - **Payload**: `{"user_id": "Current User's unique id", "role": "USER"}`
    - **Algorithm**: HS256
 6. Adicione a ação **"Return data from API"**:
-   - `token` = resultado do passo JWT Sign (o campo "Token")
+   - `jwt` = resultado do passo Encode JWT (NÃO use o nome `token`: o Bubble já devolve um `token` próprio e há conflito)
    - `user_id` = Current User's unique id
 
 ## Passo 4 — Criar o workflow `login`
@@ -53,7 +53,7 @@ no `.env` do backend. O backend já sabe adicionar `/signup` e `/login` sozinho.
 Next.js (pages/login.tsx)
    → POST /api/auth/signup  (nosso backend)
         → POST https://SEU-APP.bubbleapps.io/.../wf/signup  (Bubble)
-        ← { token, user_id }
+        ← { jwt, user_id }
    ← { token }
 → frontend guarda o token e mostra o feed
 ```
@@ -63,6 +63,6 @@ Next.js (pages/login.tsx)
 1. Depois de criar o workflow `signup` no Bubble, no próprio editor do Bubble
    existe um botão para testar o Backend Workflow diretamente (ícone de "play"
    junto ao nome do workflow) — usa isso primeiro, sem precisar do frontend,
-   para confirmar que devolve `{ "response": { "token": "...", "user_id": "..." } }`.
+   para confirmar que devolve `{ "response": { "jwt": "...", "user_id": "..." } }`.
 2. Só depois de confirmar isso, preencha `BUBBLE_API_BASE_URL` no `.env` do
    backend e teste pelo formulário em `pages/login.tsx`.

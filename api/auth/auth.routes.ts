@@ -13,7 +13,7 @@ export const authRouter = Router();
  */
 
 interface BubbleAuthResponse {
-  response: { token: string; user_id: string };
+  response: { jwt: string; user_id: string };
 }
 
 /** POST /api/auth/signup — body: { email, password } */
@@ -26,7 +26,7 @@ authRouter.post('/signup', async (req, res) => {
       email,
       password,
     });
-    return ok(res, { token: data.response.token }, 201);
+    return ok(res, { token: data.response.jwt }, 201);
   } catch (err) {
     return fail(res, 'BUBBLE_ERROR', 'Não foi possível criar a conta. Verifique os dados e tente novamente.', 400);
   }
@@ -42,7 +42,7 @@ authRouter.post('/login', async (req, res) => {
       email,
       password,
     });
-    return ok(res, { token: data.response.token });
+    return ok(res, { token: data.response.jwt });
   } catch (err) {
     return fail(res, 'UNAUTHORIZED', 'Email ou password incorretos.', 401);
   }
