@@ -1,20 +1,12 @@
 import { Router } from 'express';
 import { requireAuth } from '../../utils/auth.middleware';
 import { BubbleService } from '../../services/BubbleService';
-import { MozPaymentService, PaymentMethod } from '../../services/MozPaymentService';
+import { MozPaymentService, MobilePaymentMethod } from '../../services/MozPaymentService';
 import { createNotification } from '../notifications/notifications.routes';
 import { isActiveSubscriber } from '../../utils/premium';
 import { ok, fail } from '../../utils/response';
 
 export const subscriptionsRouter = Router();
-
-interface BubbleSubscription {
-  _id: string;
-  subscriber_id: string;
-  creator_id: string;
-  status: 'ACTIVE' | 'CANCELLED';
-  expires_at?: string;
-}
 
 interface BubbleUser {
   _id: string;
@@ -22,72 +14,85 @@ interface BubbleUser {
   username?: string;
 }
 
-const DEFAULT_PRICE_MZN = 100; // usado se o criador não tiver definido o seu próprio preço
-const SUBSCRIPTION_DAYS = 30;
+const DEFAULT_PRICE_MZN = 100;
 
 /**
  * POST /api/creators/:id/subscribe
- * Body: { paymentMethod: 'mpesa' | 'emola', phoneNumber: string, payerName: string }
- * Cobra o valor via mozpayment.co.mz ANTES de ativar a subscrição.
+ * Body: { paymentMethod: 'mpesa' | 'emola' | 'visa', phoneNumber?, payerName }
+ * phoneNumber só é obrigatório para mpesa/emola.
+ *
+ * Isto só INICIA o pagamento. A subscrição só fica ACTIVE quando o webhook
+ * em /api/payments/webhook confirmar — ver api/payments/payments.routes.ts.
+ * O frontend deve fazer polling a GET /:id/subscription-status (ou ler o
+ * campo `status` do Payment devolvido aqui) até ver `active: true`.
  */
 subscriptionsRouter.post('/:id/subscribe', requireAuth, async (req, res) => {
   const creatorId = req.params.id;
   if (creatorId === req.user!.id) return fail(res, 'VALIDATION_ERROR', 'Não pode subscrever-se a si próprio.');
 
   const { paymentMethod, phoneNumber, payerName } = req.body as {
-    paymentMethod?: PaymentMethod;
+    paymentMethod?: 'mpesa' | 'emola' | 'visa';
     phoneNumber?: string;
     payerName?: string;
   };
-  if (!paymentMethod || !phoneNumber || !payerName) {
-    return fail(res, 'VALIDATION_ERROR', 'paymentMethod, phoneNumber e payerName são obrigatórios.');
-  }
+  if (!paymentMethod || !payerName) return fail(res, 'VALIDATION_ERROR', 'paymentMethod e payerName são obrigatórios.');
+  if (paymentMethod !== 'visa' && !phoneNumber) return fail(res, 'VALIDATION_ERROR', 'phoneNumber é obrigatório para mpesa/emola.');
 
   const creator = await BubbleService.get<BubbleUser>('User', creatorId);
   if (!creator) return fail(res, 'NOT_FOUND', 'Criador não encontrado.', 404);
   const amount = creator.creator_premium_price ?? DEFAULT_PRICE_MZN;
 
-  let paid: boolean;
   try {
-    paid = await MozPaymentService.charge({ paymentMethod, amount, phoneNumber, payerName });
-  } catch {
-    return fail(res, 'PAYMENT_ERROR', 'Não foi possível contactar o serviço de pagamento. Tente novamente.', 502);
-  }
-  if (!paid) return fail(res, 'PAYMENT_DECLINED', 'Pagamento não autorizado. Confirme o número e o saldo.', 402);
+    if (paymentMethod === 'visa') {
+      const { url, session_id } = await MozPaymentService.chargeCard({
+        amount,
+        payerName,
+        productName: `Subscrição premium — @${creator.username ?? creatorId}`,
+      });
 
-  const expiresAt = new Date(Date.now() + SUBSCRIPTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const paymentId = await BubbleService.create('Payment', {
+        subscriber_id: req.user!.id,
+        creator_id: creatorId,
+        amount,
+        payment_method: paymentMethod,
+        status: 'PENDING',
+        reference: session_id,
+        purpose: 'SUBSCRIPTION',
+      });
 
-  const { items } = await BubbleService.list<BubbleSubscription>('Subscription', {
-    constraints: [
-      { key: 'subscriber_id', constraint_type: 'equals', value: req.user!.id },
-      { key: 'creator_id', constraint_type: 'equals', value: creatorId },
-    ],
-  });
+      return ok(res, { status: 'PENDING', embedUrl: url, paymentId });
+    }
 
-  if (items.length > 0) {
-    await BubbleService.update('Subscription', items[0]._id, { status: 'ACTIVE', expires_at: expiresAt });
-  } else {
-    await BubbleService.create('Subscription', {
+    const { idpayment } = await MozPaymentService.chargeMobile({
+      paymentMethod: paymentMethod as MobilePaymentMethod,
+      amount,
+      phoneNumber: phoneNumber!,
+      payerName,
+    });
+
+    const paymentId = await BubbleService.create('Payment', {
       subscriber_id: req.user!.id,
       creator_id: creatorId,
-      status: 'ACTIVE',
-      expires_at: expiresAt,
+      amount,
+      payment_method: paymentMethod,
+      status: 'PENDING',
+      reference: idpayment,
+      purpose: 'SUBSCRIPTION',
     });
-  }
 
-  await createNotification({ recipientId: creatorId, actorId: req.user!.id, type: 'FOLLOW' }); // TODO: tipo SUBSCRIPTION próprio
-  return ok(res, { status: 'ACTIVE', expiresAt });
+    return ok(res, { status: 'PENDING', paymentId });
+  } catch {
+    return fail(res, 'PAYMENT_ERROR', 'Não foi possível iniciar o pagamento. Tente novamente.', 502);
+  }
 });
 
 subscriptionsRouter.delete('/:id/subscribe', requireAuth, async (req, res) => {
-  const { items } = await BubbleService.list<BubbleSubscription>('Subscription', {
+  const { items } = await BubbleService.list<{ _id: string }>('Subscription', {
     constraints: [
       { key: 'subscriber_id', constraint_type: 'equals', value: req.user!.id },
       { key: 'creator_id', constraint_type: 'equals', value: req.params.id },
     ],
   });
-  // Cancelar aqui só impede a RENOVAÇÃO — a subscrição continua válida até expires_at,
-  // já que o valor já foi pago. Não há reembolso automático.
   if (items.length > 0) await BubbleService.update('Subscription', items[0]._id, { status: 'CANCELLED' });
   return ok(res, { status: 'CANCELLED' });
 });
@@ -99,8 +104,7 @@ subscriptionsRouter.get('/:id/subscription-status', requireAuth, async (req, res
 
 subscriptionsRouter.get('/:id/subscribers', requireAuth, async (req, res) => {
   if (req.params.id !== req.user!.id) return fail(res, 'FORBIDDEN', 'Sem permissão.', 403);
-
-  const { items } = await BubbleService.list<BubbleSubscription>('Subscription', {
+  const { items } = await BubbleService.list('Subscription', {
     constraints: [
       { key: 'creator_id', constraint_type: 'equals', value: req.params.id },
       { key: 'status', constraint_type: 'equals', value: 'ACTIVE' },

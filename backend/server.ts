@@ -17,6 +17,7 @@ import { searchRouter } from '../api/search/search.routes';
 import { hashtagsRouter } from '../api/hashtags/hashtags.routes';
 import { exploreRouter } from '../api/explore/explore.routes';
 import { subscriptionsRouter } from '../api/subscriptions/subscriptions.routes';
+import { paymentsRouter } from '../api/payments/payments.routes';
 import { reportsRouter } from '../api/reports/reports.routes';
 import { adminRouter } from '../api/admin/admin.routes';
 import { mediaRouter } from '../api/media/media.routes';
@@ -51,6 +52,7 @@ app.use('/api/search', searchRouter);
 app.use('/api/hashtags', hashtagsRouter);
 app.use('/api/explore', exploreRouter);
 app.use('/api/creators', subscriptionsRouter);
+app.use('/api/payments', paymentsRouter); // /webhook aqui dentro não tem requireAuth de propósito — quem chama é o mozpayment.co.mz
 app.use('/api/reports', reportsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/media', mediaRouter);
