@@ -16,6 +16,11 @@ const envSchema = z.object({
   AGORA_APP_CERTIFICATE: z.string(),
   AGORA_TOKEN_EXPIRATION_SECONDS: z.string().default('3600'),
   CORS_ORIGIN: z.string().default('*'),
+
+  // mozpayment.co.mz — cobrança das subscrições premium (M-Pesa / eMola)
+  MOZPAYMENT_EMAIL: z.string(),
+  MOZPAYMENT_PASSWORD: z.string(),
+  MOZPAYMENT_WALLET: z.string(), // id da carteira da Nikayia no mozpayment.co.mz
 });
 
 export const env = envSchema.parse(process.env);

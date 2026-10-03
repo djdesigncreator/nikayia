@@ -1,125 +1,161 @@
 import { Router } from 'express';
-import { prisma } from '../../config/prisma';
 import { requireAuth } from '../../utils/auth.middleware';
+import { BubbleService } from '../../services/BubbleService';
 import { createNotification } from '../notifications/notifications.routes';
-import { decodeCursor, encodeCursor } from '../../utils/pagination';
+import { isActiveSubscriber, lockIfNeeded } from '../../utils/premium';
 import { ok, fail, paginated } from '../../utils/response';
 
 export const postsRouter = Router();
 
+interface BubblePost {
+  _id: string;
+  author_id: string;
+  type: string;
+  caption?: string;
+  location?: string;
+  visibility: string;
+  likes_count: number;
+  comments_count: number;
+  shares_count: number;
+  media_urls?: string[];
+  media_types?: string[];
+  is_premium?: boolean;
+  'Created Date': string;
+}
+
 postsRouter.post('/', requireAuth, async (req, res) => {
-  const { type, caption, location, visibility, media } = req.body as {
+  const { type, caption, location, visibility, media, isPremium } = req.body as {
     type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'LINK';
     caption?: string;
     location?: string;
     visibility?: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
     media?: { url: string; type: 'IMAGE' | 'VIDEO' }[];
+    isPremium?: boolean; // só conteúdo de assinatura (comunidade premium do criador)
   };
 
   if (!type) return fail(res, 'VALIDATION_ERROR', 'type é obrigatório.');
 
-  const post = await prisma.post.create({
-    data: {
-      authorId: req.user!.id,
-      type,
-      caption,
-      location,
-      visibility: visibility ?? 'PUBLIC',
-      media: media?.length
-        ? { create: media.map((m, i) => ({ mediaUrl: m.url, mediaType: m.type, orderIndex: i })) }
-        : undefined,
-    },
-    include: { media: true },
+  const id = await BubbleService.create('Post', {
+    author_id: req.user!.id,
+    type,
+    caption,
+    location,
+    visibility: visibility ?? 'PUBLIC',
+    likes_count: 0,
+    comments_count: 0,
+    shares_count: 0,
+    media_urls: media?.map((m) => m.url) ?? [],
+    media_types: media?.map((m) => m.type) ?? [],
+    is_premium: isPremium ?? false,
   });
 
   // TODO: extrair hashtags/menções de `caption` e criar Notification/PostHashtag correspondentes.
-
+  const post = await BubbleService.get<BubblePost>('Post', id);
   return ok(res, post, 201);
 });
 
+/** GET /api/posts?cursor=&limit= — feed cronológico simples (base para o algoritmo). */
+postsRouter.get('/', requireAuth, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit ?? 20), 50);
+  const cursor = Number(req.query.cursor ?? 0);
+
+  const { items, remaining } = await BubbleService.list<BubblePost>('Post', {
+    cursor,
+    limit,
+    sortField: 'Created Date',
+    descending: true,
+  });
+
+  // Bloqueia o conteúdo dos posts premium de criadores a quem o utilizador não está subscrito.
+  const locked = await Promise.all(
+    items.map(async (post) => {
+      const canView = !post.is_premium || (await isActiveSubscriber(req.user!.id, post.author_id));
+      return lockIfNeeded(post, canView);
+    }),
+  );
+
+  const nextCursor = remaining > 0 ? String(cursor + items.length) : null;
+  return paginated(res, locked, nextCursor);
+});
+
 postsRouter.get('/:id', requireAuth, async (req, res) => {
-  const post = await prisma.post.findUnique({ where: { id: req.params.id }, include: { media: true } });
+  const post = await BubbleService.get<BubblePost>('Post', req.params.id);
   if (!post) return fail(res, 'NOT_FOUND', 'Publicação não encontrada.', 404);
-  return ok(res, post);
+
+  const canView = !post.is_premium || (await isActiveSubscriber(req.user!.id, post.author_id));
+  return ok(res, lockIfNeeded(post, canView));
 });
 
 postsRouter.delete('/:id', requireAuth, async (req, res) => {
-  const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+  const post = await BubbleService.get<BubblePost>('Post', req.params.id);
   if (!post) return fail(res, 'NOT_FOUND', 'Publicação não encontrada.', 404);
-  if (post.authorId !== req.user!.id) return fail(res, 'FORBIDDEN', 'Sem permissão.', 403);
+  if (post.author_id !== req.user!.id) return fail(res, 'FORBIDDEN', 'Sem permissão.', 403);
 
-  await prisma.post.delete({ where: { id: req.params.id } });
+  await BubbleService.delete('Post', req.params.id);
   return ok(res, { deleted: true });
 });
 
+async function findLike(userId: string, postId: string) {
+  const { items } = await BubbleService.list<{ _id: string }>('Like', {
+    constraints: [
+      { key: 'user_id', constraint_type: 'equals', value: userId },
+      { key: 'post_id', constraint_type: 'equals', value: postId },
+    ],
+  });
+  return items[0] ?? null;
+}
+
 postsRouter.post('/:id/like', requireAuth, async (req, res) => {
-  const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+  const post = await BubbleService.get<BubblePost>('Post', req.params.id);
   if (!post) return fail(res, 'NOT_FOUND', 'Publicação não encontrada.', 404);
 
-  await prisma.$transaction([
-    prisma.like.upsert({
-      where: { userId_postId: { userId: req.user!.id, postId: req.params.id } },
-      update: {},
-      create: { userId: req.user!.id, postId: req.params.id },
-    }),
-    prisma.post.update({ where: { id: req.params.id }, data: { likesCount: { increment: 1 } } }),
-  ]);
-  await createNotification({ recipientId: post.authorId, actorId: req.user!.id, type: 'LIKE', entityId: post.id });
+  const existing = await findLike(req.user!.id, req.params.id);
+  if (!existing) {
+    await BubbleService.create('Like', { user_id: req.user!.id, post_id: req.params.id });
+    await BubbleService.update('Post', req.params.id, { likes_count: (post.likes_count ?? 0) + 1 });
+    await createNotification({ recipientId: post.author_id, actorId: req.user!.id, type: 'LIKE', entityId: post._id });
+  }
   return ok(res, { liked: true });
 });
 
 postsRouter.delete('/:id/like', requireAuth, async (req, res) => {
-  const existing = await prisma.like.findUnique({
-    where: { userId_postId: { userId: req.user!.id, postId: req.params.id } },
-  });
+  const existing = await findLike(req.user!.id, req.params.id);
   if (!existing) return ok(res, { liked: false });
 
-  await prisma.$transaction([
-    prisma.like.delete({ where: { id: existing.id } }),
-    prisma.post.update({ where: { id: req.params.id }, data: { likesCount: { decrement: 1 } } }),
-  ]);
+  const post = await BubbleService.get<BubblePost>('Post', req.params.id);
+  await BubbleService.delete('Like', existing._id);
+  if (post) await BubbleService.update('Post', req.params.id, { likes_count: Math.max(0, (post.likes_count ?? 1) - 1) });
   return ok(res, { liked: false });
 });
 
-/** GET /api/feed?cursor=&limit= — feed cronológico simples (base para o algoritmo). */
-postsRouter.get('/', requireAuth, async (req, res) => {
-  const limit = Math.min(Number(req.query.limit ?? 20), 50);
-  const cursor = decodeCursor(req.query.cursor as string | undefined);
-
-  const posts = await prisma.post.findMany({
-    where: cursor ? { createdAt: { lt: new Date(cursor.createdAt) } } : undefined,
-    orderBy: { createdAt: 'desc' },
-    take: limit + 1,
-    include: { media: true },
-  });
-
-  const hasMore = posts.length > limit;
-  const items = hasMore ? posts.slice(0, limit) : posts;
-  const last = items[items.length - 1];
-  const nextCursor = hasMore && last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null;
-
-  return paginated(res, items, nextCursor);
-});
-
 postsRouter.post('/:id/save', requireAuth, async (req, res) => {
-  await prisma.savedPost.upsert({
-    where: { userId_postId: { userId: req.user!.id, postId: req.params.id } },
-    update: {},
-    create: { userId: req.user!.id, postId: req.params.id },
+  const { items } = await BubbleService.list<{ _id: string }>('SavedPost', {
+    constraints: [
+      { key: 'user_id', constraint_type: 'equals', value: req.user!.id },
+      { key: 'post_id', constraint_type: 'equals', value: req.params.id },
+    ],
   });
+  if (items.length === 0) await BubbleService.create('SavedPost', { user_id: req.user!.id, post_id: req.params.id });
   return ok(res, { saved: true });
 });
 
 postsRouter.delete('/:id/save', requireAuth, async (req, res) => {
-  await prisma.savedPost.deleteMany({ where: { userId: req.user!.id, postId: req.params.id } });
+  const { items } = await BubbleService.list<{ _id: string }>('SavedPost', {
+    constraints: [
+      { key: 'user_id', constraint_type: 'equals', value: req.user!.id },
+      { key: 'post_id', constraint_type: 'equals', value: req.params.id },
+    ],
+  });
+  await Promise.all(items.map((i) => BubbleService.delete('SavedPost', i._id)));
   return ok(res, { saved: false });
 });
 
 postsRouter.post('/:id/share', requireAuth, async (req, res) => {
-  await prisma.$transaction([
-    prisma.share.create({ data: { userId: req.user!.id, postId: req.params.id } }),
-    prisma.post.update({ where: { id: req.params.id }, data: { sharesCount: { increment: 1 } } }),
-  ]);
+  const post = await BubbleService.get<BubblePost>('Post', req.params.id);
+  if (!post) return fail(res, 'NOT_FOUND', 'Publicação não encontrada.', 404);
+
+  await BubbleService.create('Share', { user_id: req.user!.id, post_id: req.params.id });
+  await BubbleService.update('Post', req.params.id, { shares_count: (post.shares_count ?? 0) + 1 });
   return ok(res, { shared: true });
 });
 
@@ -127,10 +163,13 @@ postsRouter.post('/:id/report', requireAuth, async (req, res) => {
   const { category, description } = req.body as { category?: string; description?: string };
   if (!category) return fail(res, 'VALIDATION_ERROR', 'category é obrigatório.');
 
-  const report = await prisma.report.create({
-    data: { reporterId: req.user!.id, targetType: 'POST', targetId: req.params.id, category: category as never, description },
+  const id = await BubbleService.create('Report', {
+    reporter_id: req.user!.id,
+    target_type: 'POST',
+    target_id: req.params.id,
+    category,
+    description,
+    status: 'PENDING',
   });
-  return ok(res, report, 201);
+  return ok(res, { id }, 201);
 });
-
-// TODO: extrair hashtags/menções de `caption` e criar Notification/PostHashtag correspondentes.
