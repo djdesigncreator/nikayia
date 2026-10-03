@@ -58,8 +58,49 @@ export const BunnyService = {
     };
   },
 
-  /** Gera o path/URL de thumbnail para um vídeo, se usado o Bunny Stream. */
-  getThumbnailUrl(videoLibraryPath: string): string {
-    return this.getCdnUrl(`${videoLibraryPath}/thumbnail.jpg`);
+  // ---- Bunny Stream (vídeo) ----
+  // Produto separado da Storage Zone: transcodifica, gera thumbnail e serve
+  // em HLS adaptativo. Usar sempre que o conteúdo for vídeo (Reels, vídeos
+  // de posts, Stories em vídeo). A API Key da Video Library nunca sai daqui.
+
+  /** Cria a "ficha" do vídeo no Bunny Stream. Devolve o videoId (guid). */
+  async createStreamVideo(title: string): Promise<string> {
+    const { data } = await axios.post(
+      `https://video.bunnycdn.com/library/${env.BUNNY_STREAM_LIBRARY_ID}/videos`,
+      { title },
+      { headers: { AccessKey: env.BUNNY_STREAM_API_KEY, 'Content-Type': 'application/json' } },
+    );
+    return data.guid as string;
+  },
+
+  /**
+   * Gera as credenciais de uma sessão de upload direto (TUS) para o
+   * cliente enviar o ficheiro de vídeo sem passar pelo nosso servidor e
+   * sem nunca ver a API Key. Ver https://docs.bunny.net/docs/stream-direct-upload
+   */
+  getStreamUploadCredentials(videoId: string, expiresInSeconds = 3600) {
+    const expiration = Math.floor(Date.now() / 1000) + expiresInSeconds;
+    const signature = crypto
+      .createHash('sha256')
+      .update(`${env.BUNNY_STREAM_LIBRARY_ID}${env.BUNNY_STREAM_API_KEY}${expiration}${videoId}`)
+      .digest('hex');
+
+    return {
+      tusEndpoint: 'https://video.bunnycdn.com/tusupload',
+      libraryId: env.BUNNY_STREAM_LIBRARY_ID,
+      videoId,
+      authorizationSignature: signature,
+      authorizationExpire: expiration,
+    };
+  },
+
+  /** URL de reprodução (HLS) de um vídeo já processado pelo Bunny Stream. */
+  getStreamPlaybackUrl(videoId: string): string {
+    return `https://${env.BUNNY_STREAM_CDN_HOSTNAME}/${videoId}/playlist.m3u8`;
+  },
+
+  /** Thumbnail gerado automaticamente pelo Bunny Stream. */
+  getStreamThumbnailUrl(videoId: string): string {
+    return `https://${env.BUNNY_STREAM_CDN_HOSTNAME}/${videoId}/thumbnail.jpg`;
   },
 };

@@ -24,6 +24,29 @@ mediaRouter.post('/upload-url', requireAuth, (req, res) => {
 });
 
 /**
+ * POST /api/media/video-upload
+ * Body: { title: string }
+ * Para vídeo (Reels, vídeo de post, Story em vídeo): cria a entrada no
+ * Bunny Stream e devolve as credenciais de upload direto (TUS). O cliente
+ * usa isto com a biblioteca tus-js-client para enviar o ficheiro sem passar
+ * pelo nosso servidor. Depois do upload (e do Bunny acabar de processar),
+ * a URL de reprodução é sempre `BunnyService.getStreamPlaybackUrl(videoId)`.
+ */
+mediaRouter.post('/video-upload', requireAuth, async (req, res) => {
+  const { title } = req.body as { title?: string };
+
+  const videoId = await BunnyService.createStreamVideo(title ?? `upload-${Date.now()}`);
+  const credentials = BunnyService.getStreamUploadCredentials(videoId);
+
+  return ok(res, {
+    ...credentials,
+    videoId,
+    playbackUrl: BunnyService.getStreamPlaybackUrl(videoId),
+    thumbnailUrl: BunnyService.getStreamThumbnailUrl(videoId),
+  });
+});
+
+/**
  * POST /api/media/agora-token
  * Body: { liveId: string, channelName: string, role: 'HOST' | 'CO_HOST' | 'VIEWER' }
  * TODO: validar que req.user tem permissão para o role pedido nesse liveId

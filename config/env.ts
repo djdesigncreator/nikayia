@@ -12,6 +12,11 @@ const envSchema = z.object({
   BUNNY_STORAGE_API_KEY: z.string(),
   BUNNY_STORAGE_REGION: z.string().optional(),
   BUNNY_CDN_HOSTNAME: z.string(),
+
+  // Bunny Stream (Video Library) — só para vídeo: transcodificação, thumbnails, streaming adaptativo
+  BUNNY_STREAM_LIBRARY_ID: z.string(),
+  BUNNY_STREAM_API_KEY: z.string(),
+  BUNNY_STREAM_CDN_HOSTNAME: z.string(), // ex.: vz-xxxxx.b-cdn.net (o Pull Zone da Video Library)
   AGORA_APP_ID: z.string(),
   AGORA_APP_CERTIFICATE: z.string(),
   AGORA_TOKEN_EXPIRATION_SECONDS: z.string().default('3600'),
