@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { env } from '../config/env';
+import { env, requireEnv } from '../config/env';
 
 const BASE_URL = 'https://mozpayment.co.mz/api/1.1/wf';
 
@@ -12,8 +12,8 @@ const TOKEN_MAX_AGE_MS = 300 * 24 * 60 * 60 * 1000; // renova aos 300 dias, ante
 
 async function login(): Promise<string> {
   const { data } = await axios.post<LoginResponse>(`${BASE_URL}/login`, {
-    email: env.MOZPAYMENT_EMAIL,
-    senha: env.MOZPAYMENT_PASSWORD,
+    email: requireEnv('MOZPAYMENT_EMAIL'),
+    senha: requireEnv('MOZPAYMENT_PASSWORD'),
   });
   cachedToken = { value: data.response.token, obtainedAt: Date.now() };
   return cachedToken.value;
@@ -64,7 +64,7 @@ export const MozPaymentService = {
    */
   async chargeMobile(params: { paymentMethod: MobilePaymentMethod; amount: number; phoneNumber: string; payerName: string }) {
     return authedPost<MobilePaymentResponse>('payment', {
-      wallet: env.MOZPAYMENT_WALLET,
+      wallet: requireEnv('MOZPAYMENT_WALLET'),
       payment_method: params.paymentMethod,
       amount: String(params.amount),
       number: params.phoneNumber,
@@ -82,7 +82,7 @@ export const MozPaymentService = {
     return authedPost<BankPaymentResponse>('bankpayment', {
       valor: String(params.amount),
       nome_cliente: params.payerName,
-      carteira: env.MOZPAYMENT_WALLET,
+      carteira: requireEnv('MOZPAYMENT_WALLET'),
       nome_producto: params.productName,
     });
   },

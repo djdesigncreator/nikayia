@@ -1,6 +1,6 @@
 import { RtcRole, RtcTokenBuilder } from 'agora-access-token';
 import crypto from 'crypto';
-import { env } from '../config/env';
+import { env, requireEnv } from '../config/env';
 
 export type AgoraParticipantRole = 'HOST' | 'CO_HOST' | 'VIEWER';
 
@@ -26,8 +26,8 @@ export const AgoraService = {
     const agoraRole = role === 'VIEWER' ? RtcRole.SUBSCRIBER : RtcRole.PUBLISHER;
 
     const token = RtcTokenBuilder.buildTokenWithUid(
-      env.AGORA_APP_ID,
-      env.AGORA_APP_CERTIFICATE,
+      requireEnv('AGORA_APP_ID'),
+      requireEnv('AGORA_APP_CERTIFICATE'),
       channelName,
       uid,
       agoraRole,

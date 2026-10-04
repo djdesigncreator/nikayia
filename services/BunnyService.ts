@@ -1,6 +1,6 @@
 import axios from 'axios';
 import crypto from 'crypto';
-import { env } from '../config/env';
+import { env, requireEnv } from '../config/env';
 
 const STORAGE_BASE = env.BUNNY_STORAGE_REGION
   ? `https://${env.BUNNY_STORAGE_REGION}.storage.bunnycdn.com`
@@ -14,7 +14,7 @@ const STORAGE_BASE = env.BUNNY_STORAGE_REGION
 export const BunnyService = {
   /** Constrói a URL pública (CDN) de um ficheiro a partir do seu path na storage zone. */
   getCdnUrl(path: string): string {
-    return `https://${env.BUNNY_CDN_HOSTNAME}/${path.replace(/^\//, '')}`;
+    return `https://${requireEnv('BUNNY_CDN_HOSTNAME')}/${path.replace(/^\//, '')}`;
   },
 
   /**
@@ -23,9 +23,9 @@ export const BunnyService = {
    * upload diretamente ao Bunny, poupando banda ao nosso backend.
    */
   async uploadBuffer(path: string, buffer: Buffer, contentType: string): Promise<string> {
-    await axios.put(`${STORAGE_BASE}/${env.BUNNY_STORAGE_ZONE}/${path}`, buffer, {
+    await axios.put(`${STORAGE_BASE}/${requireEnv('BUNNY_STORAGE_ZONE')}/${path}`, buffer, {
       headers: {
-        AccessKey: env.BUNNY_STORAGE_API_KEY,
+        AccessKey: requireEnv('BUNNY_STORAGE_API_KEY'),
         'Content-Type': contentType,
       },
     });
@@ -33,8 +33,8 @@ export const BunnyService = {
   },
 
   async deleteFile(path: string): Promise<void> {
-    await axios.delete(`${STORAGE_BASE}/${env.BUNNY_STORAGE_ZONE}/${path}`, {
-      headers: { AccessKey: env.BUNNY_STORAGE_API_KEY },
+    await axios.delete(`${STORAGE_BASE}/${requireEnv('BUNNY_STORAGE_ZONE')}/${path}`, {
+      headers: { AccessKey: requireEnv('BUNNY_STORAGE_API_KEY') },
     });
   },
 
@@ -48,12 +48,12 @@ export const BunnyService = {
   generateSignedUploadUrl(path: string, expiresInSeconds = 300): { url: string; expires: number } {
     const expires = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const signature = crypto
-      .createHmac('sha256', env.BUNNY_STORAGE_API_KEY)
+      .createHmac('sha256', requireEnv('BUNNY_STORAGE_API_KEY'))
       .update(`${path}${expires}`)
       .digest('hex');
 
     return {
-      url: `${STORAGE_BASE}/${env.BUNNY_STORAGE_ZONE}/${path}?signature=${signature}&expires=${expires}`,
+      url: `${STORAGE_BASE}/${requireEnv('BUNNY_STORAGE_ZONE')}/${path}?signature=${signature}&expires=${expires}`,
       expires,
     };
   },
@@ -66,9 +66,9 @@ export const BunnyService = {
   /** Cria a "ficha" do vídeo no Bunny Stream. Devolve o videoId (guid). */
   async createStreamVideo(title: string): Promise<string> {
     const { data } = await axios.post(
-      `https://video.bunnycdn.com/library/${env.BUNNY_STREAM_LIBRARY_ID}/videos`,
+      `https://video.bunnycdn.com/library/${requireEnv('BUNNY_STREAM_LIBRARY_ID')}/videos`,
       { title },
-      { headers: { AccessKey: env.BUNNY_STREAM_API_KEY, 'Content-Type': 'application/json' } },
+      { headers: { AccessKey: requireEnv('BUNNY_STREAM_API_KEY'), 'Content-Type': 'application/json' } },
     );
     return data.guid as string;
   },
@@ -82,12 +82,12 @@ export const BunnyService = {
     const expiration = Math.floor(Date.now() / 1000) + expiresInSeconds;
     const signature = crypto
       .createHash('sha256')
-      .update(`${env.BUNNY_STREAM_LIBRARY_ID}${env.BUNNY_STREAM_API_KEY}${expiration}${videoId}`)
+      .update(`${requireEnv('BUNNY_STREAM_LIBRARY_ID')}${requireEnv('BUNNY_STREAM_API_KEY')}${expiration}${videoId}`)
       .digest('hex');
 
     return {
       tusEndpoint: 'https://video.bunnycdn.com/tusupload',
-      libraryId: env.BUNNY_STREAM_LIBRARY_ID,
+      libraryId: requireEnv('BUNNY_STREAM_LIBRARY_ID'),
       videoId,
       authorizationSignature: signature,
       authorizationExpire: expiration,
@@ -96,11 +96,11 @@ export const BunnyService = {
 
   /** URL de reprodução (HLS) de um vídeo já processado pelo Bunny Stream. */
   getStreamPlaybackUrl(videoId: string): string {
-    return `https://${env.BUNNY_STREAM_CDN_HOSTNAME}/${videoId}/playlist.m3u8`;
+    return `https://${requireEnv('BUNNY_STREAM_CDN_HOSTNAME')}/${videoId}/playlist.m3u8`;
   },
 
   /** Thumbnail gerado automaticamente pelo Bunny Stream. */
   getStreamThumbnailUrl(videoId: string): string {
-    return `https://${env.BUNNY_STREAM_CDN_HOSTNAME}/${videoId}/thumbnail.jpg`;
+    return `https://${requireEnv('BUNNY_STREAM_CDN_HOSTNAME')}/${videoId}/thumbnail.jpg`;
   },
 };
